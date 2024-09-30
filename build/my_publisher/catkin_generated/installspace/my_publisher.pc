@@ -1,0 +1,8 @@
+prefix=/home/akriti/catkin_ws/install
+
+Name: my_publisher
+Description: Description of my_publisher
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

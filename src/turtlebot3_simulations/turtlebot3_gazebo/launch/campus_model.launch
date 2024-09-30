@@ -1,0 +1,47 @@
+<launch>
+    <!-- Argument to choose the TurtleBot3 model type -->
+    <arg name="model" default="waffle_pi" doc="model type [burger, waffle, waffle_pi]" />
+
+    <!-- Start Gazebo with the world -->
+    <include file="$(find gazebo_ros)/launch/empty_world.launch">
+        <arg name="world_name" value="$(find turtlebot3_gazebo)/worlds/campus.world" />
+        <arg name="paused" value="false" />
+        <arg name="use_sim_time" value="true" />
+        <arg name="gui" value="true" />
+        <arg name="headless" value="false" />
+    </include>
+
+    <!-- Grouping the robot under a namespace -->
+    <group ns="visitor">
+        <!-- Load the robot description for the TurtleBot3 (turtlebot3_1) -->
+        <param name="robot_description" 
+               command="$(find xacro)/xacro --inorder $(find turtlebot3_description)/urdf/turtlebot3_$(arg model).urdf.xacro" />
+
+        <!-- Spawn the TurtleBot (turtlebot3_1) -->
+        <node pkg="gazebo_ros" type="spawn_model" name="spawn_visitor" 
+              args="-param robot_description -urdf -model visitor -x 7 -y 1 -z 0.1" />
+    </group>
+
+    <group ns="client_agent">
+        <!-- Load the robot description for the TurtleBot3 (turtlebot3_1) -->
+        <param name="robot_description" 
+               command="$(find xacro)/xacro --inorder $(find turtlebot3_description)/urdf/turtlebot3_$(arg model).urdf.xacro" />
+
+        <!-- Spawn the TurtleBot (turtlebot3_1) -->
+        <node pkg="gazebo_ros" type="spawn_model" name="spawn_client_agent" 
+              args="-param robot_description -urdf -model client_agent -x 6 -y 1 -z 0.1" />
+    </group>
+
+    <group ns="building_agent">
+        <!-- Load the robot description for the TurtleBot3 (turtlebot3_1) -->
+        <param name="robot_description" 
+               command="$(find xacro)/xacro --inorder $(find turtlebot3_description)/urdf/turtlebot3_$(arg model).urdf.xacro" />
+
+        <!-- Spawn the TurtleBot (turtlebot3_1) -->
+        <node pkg="gazebo_ros" type="spawn_model" name="spawn_building_agent" 
+              args="-param robot_description -urdf -model building_agent -x 0 -y 0.5 -z 0.1" />
+    </group>
+
+    <!-- Run the path planning node for turtlebot3_1 -->
+    <!-- <node pkg="turtlebot3_gazebo" type="test.py" name="path_planner_node" output="screen"/> -->
+</launch>
