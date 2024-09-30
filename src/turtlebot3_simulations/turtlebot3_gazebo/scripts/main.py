@@ -1,66 +1,80 @@
 #!/usr/bin/env python3
 
 import rospy
-from path_planning import PathPlanningTool
-from client_follower import Client_Follower
-from building_follower import Client_building_Follower
 import threading
 import numpy as np
-from utils import *
+from path_planning import NavigationPlanner
+from client_follower import ClientFollower
+from building_follower import BuildingFollower
+from typing import Dict, Tuple
 
+class NavigationSystem:
+    def __init__(self, map_path: str):
+        self.planner = NavigationPlanner(start_pose=(0.0, 0.0), goal_pose=(10.0, 10.0), map_yaml_path=map_path)
+        self.occupancy_grid, _, _ = self.planner.load_map_data()
+        self.building_follower = BuildingFollower()
+        self.client_follower = ClientFollower()
 
-def run_client_agent(obj, path, follower):
-    result = obj.move_client_agent(path)
-    print(result)
-    if result == "Reached destination":
-        follower.stop_follower = True
+    def run_agent(self, agent_type: str, path: list):
+        if agent_type == "building":
+            result = self.planner.move_building_agent(path)
+        elif agent_type == "client":
+            result = self.planner.move_client_agent(path)
+        else:
+            raise ValueError(f"Unknown agent type: {agent_type}")
 
-def run_building_agent(obj, path, follower, follower2):
-    result = obj.move_building_agent(path)
-    print(result)
-    if result == "Reached destination":
-        follower.stop_follower = True
-        follower2.stop_follower = True
+        print(f"{agent_type.capitalize()} agent result:", result)
+        if result == "Reached destination":
+            self.building_follower.stop_follower = True
+            self.client_follower.stop_follower = True
+
+    def start_navigation(self, start_pose: Tuple[float, float], goal_pose: Tuple[float, float]):
+        path = self.planner.a_star_pathfinding(self.occupancy_grid, start_pose, goal_pose)
+        print("Calculated path:", path)
+
+        building_agent_thread = threading.Thread(target=self.run_agent, args=("building", path))
+        building_follower_thread = threading.Thread(target=self.building_follower.run)
+        client_follower_thread = threading.Thread(target=self.client_follower.run)
+
+        building_agent_thread.start()
+        building_follower_thread.start()
+        client_follower_thread.start()
+
+        building_agent_thread.join()
+        building_follower_thread.join()
+        client_follower_thread.join()
 
 def main():
-    rospy.init_node('path_planning_node', anonymous=True)
-    
-    obj = PathPlanningTool(start_pose=(0.0, 0.0), goal_pose=(10.0, 10.0), map_yaml_path='/home/akriti/catkin_ws/map.yaml')
-    occupancy_grid, _, _ = obj.load_map()
-    print(1)
-    print(np.count_nonzero(occupancy_grid == 100))
+    rospy.init_node('navigation_system_node', anonymous=True)
+
+    map_path = '/home/akriti/catkin_ws/map.yaml'
+    nav_system = NavigationSystem(map_path)
 
     print("Building agent + visitor system operating")
-    start_pose = obj.inverse_convert_coordinates(0, 0.5)
+    print("Occupied cells:", np.count_nonzero(nav_system.occupancy_grid == 100))
 
-    room = {'LAB1': (-4,-5)}
-    visitor_goal = input("Hey Visitor!! I am Building agent. I will escort you to the desired room. You want to go to LAB1 or LAB2 or Office or Discussion Room")
+    rooms: Dict[str, Tuple[float, float]] = {
+        'LAB1': (-4, -5),
+        'LAB2': (-3, -4),
+        'Office': (-2, -3),
+        'Discussion Room': (-1, -2)
+    }
 
-    goal_pose = obj.inverse_convert_coordinates(room[visitor_goal][0], room[visitor_goal][1])
+    visitor_goal = input("Hey Visitor! I am the Building agent. I will escort you to the desired room. "
+                         "Where would you like to go? (LAB1/LAB2/Office/Discussion Room): ")
 
-    print("Start Position : ", start_pose)
-    print("Goal Position : ", goal_pose)
+    if visitor_goal not in rooms:
+        print("Invalid room selection. Exiting.")
+        return
 
-    path = obj.a_star_algorithm(occupancy_grid, start_pose, goal_pose)
-    print(path)
+    start_pose = nav_system.planner.inverse_transform_coordinates(0, 0.5)
+    goal_pose = nav_system.planner.inverse_transform_coordinates(*rooms[visitor_goal])
 
-    follower = Client_building_Follower()
-    follower2 = Client_Follower()
+    print("Start Position:", start_pose)
+    print("Goal Position:", goal_pose)
 
-    building_agent_thread = threading.Thread(target=run_building_agent, args=(obj, path, follower, follower2))
-    building_agent_follower_thread = threading.Thread(target=follower.run)
-    client_follow_builder = threading.Thread(target=follower2.run)
-
-    building_agent_thread.start()
-    building_agent_follower_thread.start()
-    client_follow_builder.start()
-
-    building_agent_thread.join()
-    building_agent_follower_thread.join()
-    client_follow_builder.join()
-
+    nav_system.start_navigation(start_pose, goal_pose)
     print("Kudos Visitor!! You have reached your final location")
 
 if __name__ == "__main__":
     main()
-
